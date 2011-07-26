@@ -49,43 +49,43 @@ class Recipe(BaseSlapRecipe):
     self.path_list = []
 
     self.requirements, self.ws           = self.egg.working_set()
-    self.cron_d                          = self.installCrond()    
+    self.cron_d                          = self.installCrond()
 
     self.ca_conf                         = self.installCertificateAuthority()
     self.key_path, self.certificate_path = self.requestCertificate('noVNC')
-     
+
     kvm_conf = self.installKvm(vnc_ip = self.getLocalIPv4Address())
-    
+
     vnc_port = 5900 + kvm_conf['vnc_display']
-    
+
     noVNC_conf = self.installNoVnc(source_ip   = self.getGlobalIPv6Address(),
                                    source_port = 6080,
                                    target_ip   = kvm_conf['vnc_ip'],
                                    target_port = vnc_port,
                                    python_path = kvm_conf['python_path'])
-    
+
     self.linkBinary()
     self.computer_partition.setConnectionDict(dict(
         url = "https://[%s]:%s/vnc.html?host=[%s]&port=%s&encrypt=1" % (noVNC_conf['source_ip'],
                                                      noVNC_conf['source_port'],
                                                      noVNC_conf['source_ip'],
                                                      noVNC_conf['source_port']
-                                                     ), 
+                                                     ),
         password = kvm_conf['vnc_passwd']))
-    
+
     return self.path_list
 
   def installKvm(self, vnc_ip):
     """
-    Create kvm configuration dictionnary and instanciate a wrapper for kvm and 
-    kvm controller 
+    Create kvm configuration dictionnary and instanciate a wrapper for kvm and
+    kvm controller
 
     Parameters : IP the vnc server is listening on
 
     Returns    : Dictionnary kvm_conf
     """
     kvm_conf = dict(vnc_ip = vnc_ip)
-    
+
     connection_found = False
     for tap_interface, dummy in self.parameter_dict['ip_list']:
       # Get an ip associated to a tap interface
@@ -95,13 +95,13 @@ class Recipe(BaseSlapRecipe):
       raise NotImplementedError("Do not support ip without tap interface")
 
     kvm_conf['tap_interface'] = tap_interface
-    
+
     # Disk path
     kvm_conf['disk_path'] = os.path.join(self.data_root_directory,
         'virtual.qcow2')
     kvm_conf['socket_path'] = os.path.join(self.var_directory, 'qmp_socket')
     # XXX Weak password
-    ##XXX -Vivien: add an option to generate one password for all instances 
+    ##XXX -Vivien: add an option to generate one password for all instances
     # and/or to input it yourself
     kvm_conf['vnc_passwd'] = binascii.hexlify(os.urandom(4))
 
@@ -120,7 +120,7 @@ class Recipe(BaseSlapRecipe):
           int(self.options['disk_size']))], shell=True)
       if retcode != 0:
         raise OSError, "Disk creation failed!"
-    
+
     # Options nbd_ip and nbd_port are provided by slapos master
     kvm_conf['nbd_ip']   = self.parameter_dict['nbd_ip']
     kvm_conf['nbd_port'] = self.parameter_dict['nbd_port']
@@ -134,40 +134,40 @@ class Recipe(BaseSlapRecipe):
     kvm_conf['ram_size']    = self.options['ram_size']
 
     kvm_conf['vnc_display'] = 1
-    
+
     # Instanciate KVM
-    kvm_template_location = pkg_resources.resource_filename(          
-                                             __name__, os.path.join(         
-                                             'template', 'kvm_run.in'))     
-    
-    kvm_runner_path = self.createRunningWrapper("kvm",                        
+    kvm_template_location = pkg_resources.resource_filename(
+                                             __name__, os.path.join(
+                                             'template', 'kvm_run.in'))
+
+    kvm_runner_path = self.createRunningWrapper("kvm",
           self.substituteTemplate(kvm_template_location,
                                   kvm_conf))
-   
+
     self.path_list.append(kvm_runner_path)
 
     # Instanciate KVM controller
-    kvm_controller_template_location = pkg_resources.resource_filename(          
-                                             __name__, os.path.join(         
+    kvm_controller_template_location = pkg_resources.resource_filename(
+                                             __name__, os.path.join(
                                              'template',
-                                             'kvm_controller_run.in' ))     
-    
-    kvm_controller_runner_path = self.createRunningWrapper("kvm_controller",                        
+                                             'kvm_controller_run.in' ))
+
+    kvm_controller_runner_path = self.createRunningWrapper("kvm_controller",
           self.substituteTemplate(kvm_controller_template_location,
                                   kvm_conf))
-   
+
     self.path_list.append(kvm_controller_runner_path)
-   
+
     # Instanciate Slapmonitor
     ##slapmonitor_runner_path = self.instanciate_wrapper("slapmonitor",
     #    [database_path, pid_file_path, python_path])
     # Instanciate Slapreport
     ##slapreport_runner_path = self.instanciate_wrapper("slapreport",
     #    [database_path, python_path])
-    
+
     return kvm_conf
 
-  def installNoVnc(self, source_ip, source_port, target_ip, target_port, 
+  def installNoVnc(self, source_ip, source_port, target_ip, target_port,
                    python_path):
     """
     Create noVNC configuration dictionnary and instanciate Websockify proxy
@@ -180,10 +180,10 @@ class Recipe(BaseSlapRecipe):
     """
 
     noVNC_conf = {}
-   
-    noVNC_conf['source_ip']   = source_ip                                          
+
+    noVNC_conf['source_ip']   = source_ip
     noVNC_conf['source_port'] = source_port
-    
+
     # Instanciate Websockify
     websockify_runner_path = zc.buildout.easy_install.scripts([('websockify',
       'slapos.recipe.librecipe.execute', 'execute_wait')], self.ws,
@@ -199,9 +199,9 @@ class Recipe(BaseSlapRecipe):
          '%s:%s' % (target_ip, target_port)],
         [self.certificate_path, self.key_path]]
        )[0]
-    
+
     self.path_list.append(websockify_runner_path)
-  
+
     return noVNC_conf
 
   def linkBinary(self):
@@ -225,7 +225,7 @@ class Recipe(BaseSlapRecipe):
       os.symlink(target, link)
       self.logger.debug('Created link %r -> %r' % (link, target))
       self.path_list.append(link)
-      
+
   def installCertificateAuthority(self, ca_country_code='XX',
       ca_email='xx@example.com', ca_state='State', ca_city='City',
       ca_company='Company'):
@@ -284,7 +284,7 @@ class Recipe(BaseSlapRecipe):
       ca_crl=os.path.join(config['ca_dir'], 'crl'),
       certificate_authority_path=config['ca_dir']
     )
-  
+
   def requestCertificate(self, name):
     hash = hashlib.sha512(name).hexdigest()
     key = os.path.join(self.ca_private, hash + self.ca_key_ext)
@@ -296,7 +296,7 @@ class Recipe(BaseSlapRecipe):
     parser.set('certificate', 'certificate_file', certificate)
     parser.write(open(os.path.join(self.ca_request_dir, hash), 'w'))
     return key, certificate
-  
+
   def installCrond(self):
     timestamps = self.createDataDirectory('cronstamps')
     cron_output = os.path.join(self.log_directory, 'cron-output')
