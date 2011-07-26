@@ -37,6 +37,9 @@ import hashlib
 
 class Recipe(BaseSlapRecipe):
 
+  # To avoid magic numbers
+  VNC_BASE_PORT = 5900
+
   def _install(self):
     """
     Set the connection dictionnary for the computer partition and create a list
@@ -56,7 +59,7 @@ class Recipe(BaseSlapRecipe):
 
     kvm_conf = self.installKvm(vnc_ip = self.getLocalIPv4Address())
 
-    vnc_port = 5900 + kvm_conf['vnc_display']
+    vnc_port = Recipe.VNC_BASE_PORT + kvm_conf['vnc_display']
 
     noVNC_conf = self.installNoVnc(source_ip   = self.getGlobalIPv6Address(),
                                    source_port = 6080,
@@ -165,6 +168,21 @@ class Recipe(BaseSlapRecipe):
     ##slapreport_runner_path = self.instanciate_wrapper("slapreport",
     #    [database_path, python_path])
 
+    # Add VNC promise
+    vnc_promise_template_location = pkg_resources.resource_filename(
+                                            __name__, os.path.join(
+                                            'template',
+                                            'port_listening_promise.in'))
+
+    vnc_promise_path = self.createPromiseWrapper('vnc_promise',
+          self.substituteTemplate(vnc_promise_template_location,
+                                  dict(ip=kvm_conf['vnc_ip'],
+                                       port=Recipe.VNC_BASE_PORT + kvm_conf['vnc_port'],
+                                      )
+                                 ))
+
+    self.path_list.append(vnc_promise_path)
+
     return kvm_conf
 
   def installNoVnc(self, source_ip, source_port, target_ip, target_port,
@@ -201,6 +219,21 @@ class Recipe(BaseSlapRecipe):
        )[0]
 
     self.path_list.append(websockify_runner_path)
+
+    # Add noVNC promise
+    novnc_promise_template_location = pkg_resources.resource_filename(
+                                              __name__, os.path.join(
+                                              'template',
+                                              'port_listening_promise.in'))
+
+    novnc_promise_path = self.createPromiseWrapper('novnc_promise',
+            self.substituteTemplate(novnc_promise_template_location,
+                                    dict(ip=noVNC_conf['source_ip'],
+                                         port=noVNC_conf['source_port'],
+                                        )
+                                   ))
+
+    self.path_list.append(novnc_promise_path)
 
     return noVNC_conf
 
