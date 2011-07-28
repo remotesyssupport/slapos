@@ -169,17 +169,15 @@ class Recipe(BaseSlapRecipe):
     #    [database_path, python_path])
 
     # Add VNC promise
-    vnc_promise_template_location = pkg_resources.resource_filename(
-                                            __name__, os.path.join(
-                                            'template',
-                                            'port_listening_promise.in'))
-
-    vnc_promise_path = self.createPromiseWrapper('vnc_promise',
-          self.substituteTemplate(vnc_promise_template_location,
-                                  dict(ip=kvm_conf['vnc_ip'],
-                                       port=Recipe.VNC_BASE_PORT + kvm_conf['vnc_port'],
-                                      )
-                                 ))
+    catcher = zc.buildout.easy_install.scripts(
+      [('vnc_promise', __name__ + 'port_listening_promise', 'check_promise')],
+      self.ws,
+      sys.executable,
+      self.promise_directory,
+      arguments=(kvm_conf['vnc_ip'],
+                 Recipe.VNC_BASE_PORT + kvm_conf['vnc_port']),
+    )
+    vnc_promise_path = catcher[0]
 
     self.path_list.append(vnc_promise_path)
 
@@ -221,17 +219,15 @@ class Recipe(BaseSlapRecipe):
     self.path_list.append(websockify_runner_path)
 
     # Add noVNC promise
-    novnc_promise_template_location = pkg_resources.resource_filename(
-                                              __name__, os.path.join(
-                                              'template',
-                                              'port_listening_promise.in'))
-
-    novnc_promise_path = self.createPromiseWrapper('novnc_promise',
-            self.substituteTemplate(novnc_promise_template_location,
-                                    dict(ip=noVNC_conf['source_ip'],
-                                         port=noVNC_conf['source_port'],
-                                        )
-                                   ))
+    catcher = zc.buildout.easy_install.scripts(
+      [('novnc_promise', __name__ + 'port_listening_promise', 'check_promise')],
+      self.ws,
+      sys.executable,
+      self.promise_directory,
+      arguments=(noVNC_conf['source_ip'],
+                 noVNC_conf['source_port'])
+    )
+    novnc_promise_path = catcher[0]
 
     self.path_list.append(novnc_promise_path)
 
