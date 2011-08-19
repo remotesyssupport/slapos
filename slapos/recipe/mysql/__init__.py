@@ -44,17 +44,17 @@ class Recipe(BaseSlapRecipe):
     # self.cron_d is a directory, where cron jobs can be registered
     self.cron_d = self.installCrond()
     self.logrotate_d, self.logrotate_backup = self.installLogrotate()
-    
+
     mysql_conf = self.installMysqlServer(self.getLocalIPv4Address(), 45678)
-      
+
     ca_conf = self.installCertificateAuthority()
     key, certificate = self.requestCertificate('MySQL')
-    
+
     stunnel_conf = self.installStunnel(self.getGlobalIPv6Address(),
         self.getLocalIPv4Address(), 12345, mysql_conf['tcp_port'],
         certificate, key, ca_conf['ca_crl'],
         ca_conf['certificate_authority_path'])
-    
+
     self.linkBinary()
     self.setConnectionDict(dict(
       stunnel_ip = stunnel_conf['public_ip'],
@@ -107,7 +107,7 @@ class Recipe(BaseSlapRecipe):
       )[0]
     self.path_list.append(wrapper)
     return cron_d
-  
+
   def installLogrotate(self):
     """Installs logortate main configuration file and registers its to cron"""
     logrotate_d = os.path.abspath(os.path.join(self.etc_directory,
@@ -232,7 +232,7 @@ class Recipe(BaseSlapRecipe):
     self.path_list.append(wrapper)
     return stunnel_conf
 
-    
+
   def installMysqlServer(self, ip, port, database='db', user='user',
       template_filename=None, mysql_conf=None):
     if mysql_conf is None:
