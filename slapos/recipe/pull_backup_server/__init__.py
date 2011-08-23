@@ -126,5 +126,23 @@ class Recipe(BaseSlapRecipe):
     with open(ssh_conf['sshpublic_key_file']) as file_:
       ssh_conf.update(sshpublic_key_value=str(file_.read()).strip())
 
+    self.logger.debug('Known Hosts file generation...')
+    try:
+      instance_pubkey = self.parameter_dict['instance_pubkey']
+      instance_name = self.parameter_dict['instance_name']
+    except KeyError as e:
+      raise TypeError('The parameter %r was not specified.' % e.args[0])
+    known_host_template = self.getTemplateFilename('known_hosts.in')
+    known_host_conf = {'name': instance_name,
+                       'pubkey': instance_pubkey,
+                      }
+
+    self.createConfigurationFile(os.path.join('ssh', 'known_hosts'),
+                                 self.substituteTemplate(known_host_template,
+                                                         known_host_conf)
+                                )
+
+    self.logger.info('Known Hosts file generated.')
+
     return ssh_conf
 
