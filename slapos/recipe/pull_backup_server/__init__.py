@@ -86,6 +86,8 @@ class Recipe(BaseSlapRecipe):
     try:
       instance_pubkey = self.parameter_dict['remote_pubkey']
       instance_name = self.parameter_dict['remote_hostname']
+      instance_login = self.parameter_dict['remote_login']
+      instance_port = self.parameter_dict['remote_port']
     except KeyError as e:
       raise TypeError('The parameter %r was not specified.' % e.args[0])
     # Directories configuration
@@ -144,6 +146,22 @@ class Recipe(BaseSlapRecipe):
     ssh_conf.update(known_hosts_file=known_hosts_file)
 
     self.logger.info('Known Hosts file generated.')
+
+    self.logger.debug('SSH Configuration file generation...')
+    ssh_config_template = self.getTemplateFilename('ssh_config.in')
+    ssh_config_dict = {'host': instance_name,
+                       'username': instance_login,
+                       'known_hosts_file': known_hosts_file,
+                       'port': instance_port,
+                       'private_key': ssh_conf['sshprivate_key_file'],
+                      }
+    ssh_config_file = self.createConfigurationFile(
+      os.path.join('ssh', 'ssh_config'),
+      self.substituteTemplate(ssh_config_template,
+                              ssh_config_dict)
+    )
+    ssh_conf.update(ssh_config_file=ssh_config_file)
+    self.logger.info('SSH Configuration generated.')
 
     return ssh_conf
 
