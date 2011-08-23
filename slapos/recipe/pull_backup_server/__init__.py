@@ -82,18 +82,10 @@ class Recipe(BaseSlapRecipe):
 
   def installOpenSSHClient(self):
     # Directories configuration
-    sshconf_dir = os.path.join(self.etc_directory,
-                               'ssh',
-                              )
+    sshconf_dir = os.path.join(self.etc_directory, 'ssh')
     self._createDirectory(sshconf_dir)
-
-    sshkey = os.path.join(sshconf_dir,
-                          'key',
-                         )
-
-    knownhost_file = os.path.join(sshconf_dir,
-                                 'known_hosts',
-                                 )
+    sshkey = os.path.join(sshconf_dir, 'key')
+    knownhost_file = os.path.join(sshconf_dir, 'known_hosts')
 
     ssh_conf = dict(sshconf_dir=sshconf_dir,
                     sshprivate_key_file=sshkey,
