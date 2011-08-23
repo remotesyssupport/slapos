@@ -55,7 +55,7 @@ class Recipe(BaseSlapRecipe):
     self.ssh_conf = self.installOpenSSHClient()
 
     self.setConnectionDict(dict(
-      public_ssh_key=ssh_conf['sshpublic_key_value']
+      public_ssh_key=self.ssh_conf['sshpublic_key_value'],
     ))
 
     return self.path_list
