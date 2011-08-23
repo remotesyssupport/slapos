@@ -92,12 +92,10 @@ class Recipe(BaseSlapRecipe):
     sshconf_dir = os.path.join(self.etc_directory, 'ssh')
     self._createDirectory(sshconf_dir)
     sshkey = os.path.join(sshconf_dir, 'key')
-    knownhost_file = os.path.join(sshconf_dir, 'known_hosts')
 
     ssh_conf = dict(sshconf_dir=sshconf_dir,
                     sshprivate_key_file=sshkey,
                     sshpublic_key_file=Recipe.SSH_KEY_PUBLIC_NAME(sshkey),
-                    knownhost_file=knownhost_file,
                    )
 
     # Generate SSH keys
@@ -138,10 +136,12 @@ class Recipe(BaseSlapRecipe):
                        'pubkey': instance_pubkey,
                       }
 
-    self.createConfigurationFile(os.path.join('ssh', 'known_hosts'),
-                                 self.substituteTemplate(known_host_template,
-                                                         known_host_conf)
-                                )
+    known_hosts_file = self.createConfigurationFile(
+      os.path.join('ssh', 'known_hosts'),
+      self.substituteTemplate(known_host_template,
+                              known_host_conf)
+    )
+    ssh_conf.update(known_hosts_file=known_hosts_file)
 
     self.logger.info('Known Hosts file generated.')
 
