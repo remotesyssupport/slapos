@@ -118,6 +118,8 @@ class Recipe(BaseSlapRecipe):
       self.logger.info('SSH Keys generated.')
 
     else:
+      # XXX-Antoine: to avoid "unused option" message
+      self.options['ssh_keygen_binary']
       self.logger.info('SSH Keys already generated.')
 
     with open(ssh_conf['sshpublic_key_file']) as file_:
