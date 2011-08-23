@@ -82,6 +82,12 @@ class Recipe(BaseSlapRecipe):
     return cron_d
 
   def installOpenSSHClient(self):
+    # Get parameters of the instance
+    try:
+      instance_pubkey = self.parameter_dict['remote_pubkey']
+      instance_name = self.parameter_dict['remote_hostname']
+    except KeyError as e:
+      raise TypeError('The parameter %r was not specified.' % e.args[0])
     # Directories configuration
     sshconf_dir = os.path.join(self.etc_directory, 'ssh')
     self._createDirectory(sshconf_dir)
@@ -127,11 +133,6 @@ class Recipe(BaseSlapRecipe):
       ssh_conf.update(sshpublic_key_value=str(file_.read()).strip())
 
     self.logger.debug('Known Hosts file generation...')
-    try:
-      instance_pubkey = self.parameter_dict['instance_pubkey']
-      instance_name = self.parameter_dict['instance_name']
-    except KeyError as e:
-      raise TypeError('The parameter %r was not specified.' % e.args[0])
     known_host_template = self.getTemplateFilename('known_hosts.in')
     known_host_conf = {'name': instance_name,
                        'pubkey': instance_pubkey,
