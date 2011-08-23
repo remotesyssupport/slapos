@@ -64,5 +64,6 @@ setup(name=name,
           'vifib = slapos.recipe.vifib:Recipe',
           'xwiki = slapos.recipe.xwiki:Recipe',
           'zabbixagent = slapos.recipe.zabbixagent:Recipe',
+          'pull_backup_server = slapos.recipe.pull_backup_server:Recipe',
       ]},
     )
