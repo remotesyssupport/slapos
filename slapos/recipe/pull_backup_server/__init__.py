@@ -122,8 +122,9 @@ class Recipe(BaseSlapRecipe):
       self.options['ssh_keygen_binary']
       self.logger.info('SSH Keys already generated.')
 
+    # Getting the public ssh key value
     with open(ssh_conf['sshpublic_key_file']) as file_:
-      ssh_conf.update(sshpublic_key_value=file_.read())
+      ssh_conf.update(sshpublic_key_value=str(file_.read()).strip())
 
     return ssh_conf
 
