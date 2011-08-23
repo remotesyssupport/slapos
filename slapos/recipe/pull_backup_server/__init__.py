@@ -52,7 +52,7 @@ class Recipe(BaseSlapRecipe):
 
     self.cron_d = self.installCrond()
 
-    ssh_conf = self.installOpenSSHClient()
+    self.ssh_conf = self.installOpenSSHClient()
 
     self.setConnectionDict(dict(
       public_ssh_key=ssh_conf['sshpublic_key_value']
