@@ -50,7 +50,8 @@ class Recipe(BaseSlapRecipe):
 
     self.requirements, self.ws = self.egg.working_set()
 
-    cron_d = self.installCrond()
+    self.cron_d = self.installCrond()
+
     ssh_conf = self.installOpenSSHClient()
 
     self.setConnectionDict(dict(
