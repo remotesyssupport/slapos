@@ -169,7 +169,7 @@ class Recipe(BaseSlapRecipe):
     #    [database_path, python_path])
 
     # Add VNC promise
-    catcher = zc.buildout.easy_install.scripts(
+    zc.buildout.easy_install.scripts(
       [('vnc_promise', __name__ + 'port_listening_promise', 'check_promise')],
       self.ws,
       sys.executable,
@@ -177,9 +177,6 @@ class Recipe(BaseSlapRecipe):
       arguments=(kvm_conf['vnc_ip'],
                  Recipe.VNC_BASE_PORT + kvm_conf['vnc_port']),
     )
-    vnc_promise_path = catcher[0]
-
-    self.path_list.append(vnc_promise_path)
 
     return kvm_conf
 
@@ -219,7 +216,7 @@ class Recipe(BaseSlapRecipe):
     self.path_list.append(websockify_runner_path)
 
     # Add noVNC promise
-    catcher = zc.buildout.easy_install.scripts(
+    zc.buildout.easy_install.scripts(
       [('novnc_promise', __name__ + 'port_listening_promise', 'check_promise')],
       self.ws,
       sys.executable,
@@ -227,9 +224,6 @@ class Recipe(BaseSlapRecipe):
       arguments=(noVNC_conf['source_ip'],
                  noVNC_conf['source_port'])
     )
-    novnc_promise_path = catcher[0]
-
-    self.path_list.append(novnc_promise_path)
 
     return noVNC_conf
 
