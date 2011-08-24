@@ -194,7 +194,7 @@ class Recipe(BaseSlapRecipe):
       port=Recipe.VNC_BASE_PORT + kvm_conf['vnc_port'],
     )
     self.createPromiseWrapper("vnc_promise",
-        self.substituteTemplate(self.check_port_listening,
+        self.substituteTemplate(self.port_listening_promise_path,
                                 self.port_listening_promise_conf,
                                )
                              )
@@ -241,7 +241,7 @@ class Recipe(BaseSlapRecipe):
                                             port=noVNC_conf['source_port'],
                                            )
     self.createPromiseWrapper("novnc_promise",
-        self.substituteTemplate(self.check_port_listening,
+        self.substituteTemplate(self.port_listening_promise_path,
                                 self.port_listening_promise_conf,
                                )
                              )
