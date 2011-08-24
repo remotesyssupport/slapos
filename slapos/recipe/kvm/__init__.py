@@ -191,7 +191,7 @@ class Recipe(BaseSlapRecipe):
     # Add VNC promise
     self.port_listening_promise_conf.update(
       hostname=kvm_conf['vnc_ip'],
-      port=Recipe.VNC_BASE_PORT + kvm_conf['vnc_port'],
+      port=Recipe.VNC_BASE_PORT + kvm_conf['vnc_display'],
     )
     self.createPromiseWrapper("vnc_promise",
         self.substituteTemplate(self.port_listening_promise_path,
