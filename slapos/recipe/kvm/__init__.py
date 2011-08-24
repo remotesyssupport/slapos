@@ -68,11 +68,7 @@ class Recipe(BaseSlapRecipe):
     check_port_listening_script = catcher[0]
     # Get the port_listening_promise template path, and save it
     self.port_listening_promise_path = pkg_resources.resource_filename(
-      __name__,
-      os.path.join('template',
-                   'port_listening_promise.in',
-                  )
-    )
+      __name__, 'template/port_listening_promise.in')
     self.port_listening_promise_conf = dict(
      check_port_listening_script=check_port_listening_script,
     )
@@ -160,8 +156,7 @@ class Recipe(BaseSlapRecipe):
 
     # Instanciate KVM
     kvm_template_location = pkg_resources.resource_filename(
-                                             __name__, os.path.join(
-                                             'template', 'kvm_run.in'))
+      __name__, 'template/kvm_run.in')
 
     kvm_runner_path = self.createRunningWrapper("kvm",
           self.substituteTemplate(kvm_template_location,
@@ -171,9 +166,7 @@ class Recipe(BaseSlapRecipe):
 
     # Instanciate KVM controller
     kvm_controller_template_location = pkg_resources.resource_filename(
-                                             __name__, os.path.join(
-                                             'template',
-                                             'kvm_controller_run.in' ))
+      __name__, 'template/kvm_controller_run.in')
 
     kvm_controller_runner_path = self.createRunningWrapper("kvm_controller",
           self.substituteTemplate(kvm_controller_template_location,
