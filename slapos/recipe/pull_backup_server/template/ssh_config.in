@@ -4,3 +4,4 @@ Host %(host)s
 User %(username)s
 Port %(port)s
 IdentityFile %(private_key)s
+Compression yes
