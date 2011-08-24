@@ -57,6 +57,26 @@ class Recipe(BaseSlapRecipe):
     self.ca_conf                         = self.installCertificateAuthority()
     self.key_path, self.certificate_path = self.requestCertificate('noVNC')
 
+    # Install the socket_connection_attempt script
+    catcher = zc.buildout.easy_install.scripts(
+      [('check_port_listening', __name__ + 'socket_connection_attempt', 'connection_attempt')],
+      self.ws,
+      sys.executable,
+      self.bin_directory,
+    )
+    # Save the check_port_listening script path
+    check_port_listening_script = catcher[0]
+    # Get the port_listening_promise template path, and save it
+    self.port_listening_promise_path = pkg_resources.resource_filename(
+      __name__,
+      os.path.join('template',
+                   'port_listening_promise.in',
+                  )
+    )
+    self.port_listening_promise_conf = dict(
+     check_port_listening_script=check_port_listening_script,
+    )
+
     kvm_conf = self.installKvm(vnc_ip = self.getLocalIPv4Address())
 
     vnc_port = Recipe.VNC_BASE_PORT + kvm_conf['vnc_display']
@@ -169,14 +189,15 @@ class Recipe(BaseSlapRecipe):
     #    [database_path, python_path])
 
     # Add VNC promise
-    zc.buildout.easy_install.scripts(
-      [('vnc_promise', __name__ + 'port_listening_promise', 'check_promise')],
-      self.ws,
-      sys.executable,
-      self.promise_directory,
-      arguments=(kvm_conf['vnc_ip'],
-                 Recipe.VNC_BASE_PORT + kvm_conf['vnc_port']),
+    self.port_listening_promise_conf.update(
+      hostname=kvm_conf['vnc_ip'],
+      port=Recipe.VNC_BASE_PORT + kvm_conf['vnc_port'],
     )
+    self.createPromiseWrapper("vnc_promise",
+        self.substituteTemplate(self.check_port_listening,
+                                self.port_listening_promise_conf,
+                               )
+                             )
 
     return kvm_conf
 
@@ -216,14 +237,14 @@ class Recipe(BaseSlapRecipe):
     self.path_list.append(websockify_runner_path)
 
     # Add noVNC promise
-    zc.buildout.easy_install.scripts(
-      [('novnc_promise', __name__ + 'port_listening_promise', 'check_promise')],
-      self.ws,
-      sys.executable,
-      self.promise_directory,
-      arguments=(noVNC_conf['source_ip'],
-                 noVNC_conf['source_port'])
-    )
+    self.port_listening_promise_conf.update(hostname=noVNC_conf['source_ip'],
+                                            port=noVNC_conf['source_port'],
+                                           )
+    self.createPromiseWrapper("novnc_promise",
+        self.substituteTemplate(self.check_port_listening,
+                                self.port_listening_promise_conf,
+                               )
+                             )
 
     return noVNC_conf
 
