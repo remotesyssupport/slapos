@@ -40,6 +40,13 @@ class Recipe(BaseSlapRecipe):
   SSH_KEY_PUBLIC_NAME = staticmethod(
     lambda name: '%s.pub' % name
   )
+  DEFAULT_BACKUP_FRENQUENCY = 'daily'
+  AVAILABLE_FREQUENCIES = ('hourly',
+                           'daily',
+                           'weekly',
+                           'monthly',
+                           'yearly',
+                          )
 
   def getTemplateFilename(self, template_name):
     return pkg_resources.resource_filename(__name__,
@@ -53,6 +60,8 @@ class Recipe(BaseSlapRecipe):
     self.cron_d = self.installCrond()
 
     self.ssh_conf = self.installOpenSSHClient()
+
+    self.installRdiffBackup()
 
     self.setConnectionDict(dict(
       public_ssh_key=self.ssh_conf['sshpublic_key_value'],
@@ -98,6 +107,7 @@ class Recipe(BaseSlapRecipe):
     ssh_conf = dict(sshconf_dir=sshconf_dir,
                     sshprivate_key_file=sshkey,
                     sshpublic_key_file=Recipe.SSH_KEY_PUBLIC_NAME(sshkey),
+                    hostname=instance_name
                    )
 
     # Generate SSH keys
@@ -117,7 +127,7 @@ class Recipe(BaseSlapRecipe):
                                     '-t', str(Recipe.SSH_KEY_TYPE),
                                     '-N', '', # No password
                                     '-C', '', # No comment
-                                    '-f', str(ssh_conf['sshprivate_key']),
+                                    '-f', str(ssh_conf['sshprivate_key_file']),
                                    ])
       if returncode != 0:
         raise OSError('Error during the ssh client key configuration.')
@@ -161,7 +171,58 @@ class Recipe(BaseSlapRecipe):
                               ssh_config_dict)
     )
     ssh_conf.update(ssh_config_file=ssh_config_file)
+
+    ssh_command_template = "'%(ssh_binary)s' " + \
+                           "-F '%(ssh_config_file)s' " + \
+                           "%%s "
+    ssh_command_line = ssh_command_template % {
+      'ssh_binary': self.options['ssh_binary'],
+      'ssh_config_file': ssh_conf['ssh_config_file'],
+    }
+    ssh_conf.update(ssh_command_line=ssh_command_line)
+
     self.logger.info('SSH Configuration generated.')
 
     return ssh_conf
+
+  def installRdiffBackup(self):
+    frequency = getattr(self.parameter_dict, 'frequency', None)
+    if frequency is None:
+      frequency = Recipe.DEFAULT_BACKUP_FRENQUENCY
+
+    if frequency not in Recipe.AVAILABLE_FREQUENCIES:
+      raise ValueError('Frequency parameter not in %r' % \
+                       Recipe.AVAILABLE_FREQUENCIES
+                      )
+
+    distant_directory = getattr(self.parameter_dict, 'remote_directory', None)
+    if distant_directory is None:
+      raise TypeError("Distant directory wasn't specified.")
+
+    backup_directory = self.createBackupDirectory('remote')
+    remote_schema = self.ssh_conf['ssh_command_line'] + \
+                    'rdiff-backup --server'
+
+    cron_command = ('%(rdiff_backup_binary)s ' + \
+                   '--remote-schema "%(remote_schema)s" ' + \
+                   '"%(source)s" ' + \
+                   '"%(destination)s"') % {
+                     'rdiff_backup_binary': self.options['rdiff_backup_binary'],
+                     'remote_schema': remote_schema,
+                     'source':  '%s:%s' % (self.ssh_conf['hostname'],
+                                           distant_directory,
+                                          ),
+                     'destination': backup_directory,
+                   }
+
+    cron_line = '@%(frequency)s %(command)s'
+
+    backup_cron = os.path.join(self.cron_d, 'backup')
+    with open(backup_cron, 'w') as file_:
+      file_.write(cron_line % {
+        'frequency': frequency,
+        'command': cron_command,
+      })
+
+    return backup_directory
 
