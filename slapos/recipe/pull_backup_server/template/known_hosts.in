@@ -1,2 +1,2 @@
-%(name)s %(pubkey)s
+[%(hostname)s]:%(port)s %(pubkey)s
 

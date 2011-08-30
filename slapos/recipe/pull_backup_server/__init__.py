@@ -37,9 +37,6 @@ class Recipe(BaseSlapRecipe):
   # Kinda like C macro to avoid magic number/expression
   SSH_KEY_BIT_SIZE = 2048
   SSH_KEY_TYPE = 'rsa'
-  SSH_KEY_PUBLIC_NAME = staticmethod(
-    lambda name: '%s.pub' % name
-  )
   DEFAULT_BACKUP_FRENQUENCY = 'daily'
   AVAILABLE_FREQUENCIES = ('hourly',
                            'daily',
@@ -95,19 +92,22 @@ class Recipe(BaseSlapRecipe):
     try:
       instance_pubkey = self.parameter_dict['remote_pubkey']
       instance_name = self.parameter_dict['remote_hostname']
-      instance_login = self.parameter_dict['remote_login']
       instance_port = self.parameter_dict['remote_port']
     except KeyError as e:
       raise TypeError('The parameter %r was not specified.' % e.args[0])
     # Directories configuration
-    sshconf_dir = os.path.join(self.etc_directory, 'ssh')
-    self._createDirectory(sshconf_dir)
-    sshkey = os.path.join(sshconf_dir, 'key')
+    fakehome_dir = os.path.join(self.work_directory, 'home')
+    self._createDirectory(fakehome_dir)
+    fakessh_dir = os.path.join(fakehome_dir, '.ssh')
+    self._createDirectory(fakessh_dir)
+    sshkey = os.path.join(fakessh_dir, 'id_rsa')
+    sshpubkey = os.path.join(fakessh_dir, 'id_rsa.pub')
 
-    ssh_conf = dict(sshconf_dir=sshconf_dir,
+    ssh_conf = dict(fakehome_dir=fakehome_dir,
+                    fakessh_dir=fakessh_dir,
                     sshprivate_key_file=sshkey,
-                    sshpublic_key_file=Recipe.SSH_KEY_PUBLIC_NAME(sshkey),
-                    hostname=instance_name
+                    sshpublic_key_file=sshpubkey,
+                    hostname=instance_name,
                    )
 
     # Generate SSH keys
@@ -122,20 +122,30 @@ class Recipe(BaseSlapRecipe):
           os.remove(file_)
       # SSH Key generation
       self.logger.debug('SSH Keys generation...')
-      returncode = subprocess.call([str(self.options['ssh_keygen_binary']),
-                                    '-b', str(Recipe.SSH_KEY_BIT_SIZE),
-                                    '-t', str(Recipe.SSH_KEY_TYPE),
-                                    '-N', '', # No password
-                                    '-C', '', # No comment
-                                    '-f', str(ssh_conf['sshprivate_key_file']),
-                                   ])
+      dropbearkey = subprocess.Popen(
+        [
+          str(self.options['dropbear_keygen_binary']),
+          '-t', str(Recipe.SSH_KEY_TYPE),
+          '-s', str(Recipe.SSH_KEY_BIT_SIZE),
+          '-f', str(ssh_conf['sshprivate_key_file']),
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+      )
+      stdout, stderr = dropbearkey.communicate()
+      returncode = dropbearkey.poll()
       if returncode != 0:
         raise OSError('Error during the ssh client key configuration.')
+      # XXX: equivalent to ... | egrep "^ssh-" | head -n 1
+      pubkey = [line
+                for line in str(stdout).splitlines()
+                if line.startswith('ssh-')][0]
+      self._writeFile(ssh_conf['sshpublic_key_file'], pubkey)
       self.logger.info('SSH Keys generated.')
 
     else:
       # XXX-Antoine: to avoid "unused option" message
-      self.options['ssh_keygen_binary']
+      self.options['dropbear_keygen_binary']
       self.logger.info('SSH Keys already generated.')
 
     # Getting the public ssh key value
@@ -144,12 +154,14 @@ class Recipe(BaseSlapRecipe):
 
     self.logger.debug('Known Hosts file generation...')
     known_host_template = self.getTemplateFilename('known_hosts.in')
-    known_host_conf = {'name': instance_name,
+    known_host_conf = {'hostname': instance_name,
+                       'port': instance_port,
                        'pubkey': instance_pubkey,
                       }
 
-    known_hosts_file = self.createConfigurationFile(
-      os.path.join('ssh', 'known_hosts'),
+    known_hosts_file = os.path.join(ssh_conf['fakessh_dir'], 'known_hosts')
+    self._writeFile(
+      known_hosts_file,
       self.substituteTemplate(known_host_template,
                               known_host_conf)
     )
@@ -157,36 +169,29 @@ class Recipe(BaseSlapRecipe):
 
     self.logger.info('Known Hosts file generated.')
 
-    self.logger.debug('SSH Configuration file generation...')
-    ssh_config_template = self.getTemplateFilename('ssh_config.in')
-    ssh_config_dict = {'host': instance_name,
-                       'username': instance_login,
-                       'known_hosts_file': known_hosts_file,
-                       'port': instance_port,
-                       'private_key': ssh_conf['sshprivate_key_file'],
-                      }
-    ssh_config_file = self.createConfigurationFile(
-      os.path.join('ssh', 'ssh_config'),
-      self.substituteTemplate(ssh_config_template,
-                              ssh_config_dict)
-    )
-    ssh_conf.update(ssh_config_file=ssh_config_file)
-
-    ssh_command_template = "'%(ssh_binary)s' " + \
-                           "-F '%(ssh_config_file)s' " + \
-                           "%%s "
-    ssh_command_line = ssh_command_template % {
-      'ssh_binary': self.options['ssh_binary'],
-      'ssh_config_file': ssh_conf['ssh_config_file'],
+    self.logger.debug('Create SSH client binary')
+    ssh_binary_template = self.getTemplateFilename('dbclient.in')
+    ssh_binary_conf = {
+      'fakehome': ssh_conf['fakehome_dir'],
+      'dbclient_binary': self.options['dropbear_client_binary'],
     }
-    ssh_conf.update(ssh_command_line=ssh_command_line)
+    ssh_binary = os.path.join(self.bin_directory, 'ssh')
+    self._writeExecutable(ssh_binary,
+                          self.substituteTemplate(ssh_binary_template,
+                                                  ssh_binary_conf)
+                         )
 
-    self.logger.info('SSH Configuration generated.')
+    ssh_conf.update(ssh_binary=ssh_binary)
 
     return ssh_conf
 
   def installRdiffBackup(self):
-    frequency = getattr(self.parameter_dict, 'frequency', None)
+    try:
+      instance_port = self.parameter_dict['remote_port']
+    except KeyError as e:
+      raise TypeError('The parameter %r was not specified.' % e.args[0])
+
+    frequency = self.parameter_dict.get('frequency', None)
     if frequency is None:
       frequency = Recipe.DEFAULT_BACKUP_FRENQUENCY
 
@@ -195,13 +200,22 @@ class Recipe(BaseSlapRecipe):
                        Recipe.AVAILABLE_FREQUENCIES
                       )
 
-    distant_directory = getattr(self.parameter_dict, 'remote_directory', None)
+    distant_directory = self.parameter_dict.get('remote_directory', None)
     if distant_directory is None:
       raise TypeError("Distant directory wasn't specified.")
 
+    distant_rdiffbackup = self.parameter_dict.get('remote_rdiffbackup', None)
+    if distant_rdiffbackup is None:
+      raise TypeError("Distant rdiff-backup binary path wasn't specified")
+
+
     backup_directory = self.createBackupDirectory('remote')
-    remote_schema = self.ssh_conf['ssh_command_line'] + \
-                    'rdiff-backup --server'
+    remote_schema = ("'%(ssh_binary)s' -p %(port)s %%s " + \
+                    "'%(rdiffbackup_binary)s' --server") % {
+                      'ssh_binary': self.ssh_conf['ssh_binary'],
+                      'port': instance_port,
+                      'rdiffbackup_binary': distant_rdiffbackup,
+                    }
 
     cron_command = ('%(rdiff_backup_binary)s ' + \
                    '--remote-schema "%(remote_schema)s" ' + \
@@ -209,7 +223,7 @@ class Recipe(BaseSlapRecipe):
                    '"%(destination)s"') % {
                      'rdiff_backup_binary': self.options['rdiff_backup_binary'],
                      'remote_schema': remote_schema,
-                     'source':  '%s:%s' % (self.ssh_conf['hostname'],
+                     'source':  '[%s]:%s' % (self.ssh_conf['hostname'],
                                            distant_directory,
                                           ),
                      'destination': backup_directory,
