@@ -232,11 +232,12 @@ class Recipe(BaseSlapRecipe):
     cron_line = '@%(frequency)s %(command)s'
 
     backup_cron = os.path.join(self.cron_d, 'backup')
-    with open(backup_cron, 'w') as file_:
-      file_.write(cron_line % {
-        'frequency': frequency,
-        'command': cron_command,
-      })
+    self._writeFile(backup_cron,
+                    cron_line % {
+                      'frequency': frequency,
+                      'command': cron_command,
+                    }
+                   )
 
     return backup_directory
 
