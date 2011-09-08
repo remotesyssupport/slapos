@@ -345,8 +345,8 @@ class Recipe(BaseSlapRecipe):
     computer_partition = self.request(
       # XXX: Hardcoded url
       'http://git.erp5.org/gitweb/slapos.git/blob_plain/refs/heads/webdav:/software/davstorage/software.cfg'
-      'davstorage',
       'mysql_backup',
+      'davstorage',
     )
     url = re.sub('^http', 'webdav', computer_partition.getConnectionParameter('url'))
     url = list(urlparse.urlparse(url))
