@@ -346,6 +346,7 @@ class Recipe(BaseSlapRecipe):
       self.options['davstorage-software-url'],
       'davstorage',
       'mysql_backup',
+      'davstorage',
     )
     url = re.sub('^http', 'webdav', computer_partition.getConnectionParameter('url'))
     url = list(urlparse.urlparse(url))
