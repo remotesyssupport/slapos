@@ -25,21 +25,16 @@
 #
 ##############################################################################
 from slapos.recipe.librecipe import BaseSlapRecipe
-import slapos
 import hashlib
 import os
 import pkg_resources
 import sys
 import zc.buildout
 import ConfigParser
-import subprocess
-import pwd
+import re
+import urlparse
 
 class Recipe(BaseSlapRecipe):
-  # Kinda like C macro to avoid magic number/expression
-  SSH_KEY_BIT_SIZE = 2048
-  SSH_KEY_TYPE = 'rsa'
-
   def getTemplateFilename(self, template_name):
     return pkg_resources.resource_filename(__name__,
         'template/%s' % template_name)
@@ -62,10 +57,6 @@ class Recipe(BaseSlapRecipe):
         self.getLocalIPv4Address(), 12345, mysql_conf['tcp_port'],
         certificate, key, ca_conf['ca_crl'],
         ca_conf['certificate_authority_path'])
-
-    self.sshd_conf = self.installOpenSSHServer(self.getGlobalIPv6Address(),
-                                          7890)
-
 
     self.linkBinary()
     self.setConnectionDict(dict(
@@ -336,125 +327,32 @@ class Recipe(BaseSlapRecipe):
         incremental_backup])[0]
     self.path_list.append(backup_controller)
     mysql_backup_cron = os.path.join(self.cron_d, 'mysql_backup')
-    open(mysql_backup_cron, 'w').write('0 0 * * * ' + backup_controller)
+    open(mysql_backup_cron, 'w').write('0 0 * * * %r' % str(backup_controller))
     self.path_list.append(mysql_backup_cron)
     mysql_conf.update(backup_directory=incremental_backup)
     # The return could be more explicit database, user ...
+    remote_url = self.installWebDAVBackup()
+    remote_backup_cron = os.path.join(self.cron_d, 'remote_backup')
+    with open(remote_backup_cron, 'w') as file_:
+      file_.write('1 0 * * * %s' % ' '.join([
+        '%r' % str(self.options['duplicity_binary']),
+        '--no-encryption',
+        '%r' % str(backup_directory), '%r' % str(remote_url),
+      ]))
     return mysql_conf
 
-  def installOpenSSHServer(self, ip, port):
-    # XXX: If ip is an ipv6 address put it between brackets
-    if ':' in ip:
-      ip = '[%s]' % ip
-    sshd_conf = dict(ip=ip, port=port,
-                     fakehome_dir=os.path.join(self.work_directory, 'home'),
-                     conf_dir=os.path.join(self.etc_directory, 'ssh'),
-                     login=pwd.getpwuid(os.getuid())[0],
-                    )
-    self._createDirectory(sshd_conf['fakehome_dir'])
-    self._createDirectory(sshd_conf['conf_dir'])
-
-    sshd_conf.update(fakessh_dir=os.path.join(sshd_conf['fakehome_dir'],
-                                              '.ssh'))
-    self._createDirectory(sshd_conf['fakessh_dir'])
-
-    sshd_conf.update(sshprivate_key_file=os.path.join(
-      sshd_conf['conf_dir'], 'privatekey'))
-    sshd_conf.update(sshpublic_key_file=os.path.join(
-      sshd_conf['conf_dir'], 'publickey'))
-
-
-    # Generate SSH keys
-    ssh_keys = (sshd_conf['sshprivate_key_file'],
-                sshd_conf['sshpublic_key_file'],
-               )
-
-    if not all([os.path.isfile(key) for key in ssh_keys]):
-      # If any ssh_key exists
-      for file_ in ssh_keys:
-        if os.path.exists(file_):
-          os.remove(file_)
-      # SSH Key generation
-      self.logger.debug('SSH Keys generation...')
-      dropbearkey = subprocess.Popen(
-        [
-          str(self.options['dropbear_keygen_binary']),
-          '-t', str(Recipe.SSH_KEY_TYPE),
-          '-s', str(Recipe.SSH_KEY_BIT_SIZE),
-          '-f', str(sshd_conf['sshprivate_key_file']),
-        ],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-      )
-      stdout, stderr = dropbearkey.communicate()
-      returncode = dropbearkey.poll()
-      if returncode != 0:
-        raise OSError('Error during the ssh client key configuration.')
-      # XXX: equivalent to ... | egrep "^ssh-" | head -n 1
-      pubkey = [line
-                for line in str(stdout).splitlines()
-                if line.startswith('ssh-')][0]
-      self._writeFile(sshd_conf['sshpublic_key_file'], pubkey)
-      self.logger.info('SSH Keys generated.')
-
-    else:
-      # XXX-Antoine: to avoid "unused option" message
-      self.options['dropbear_keygen_binary']
-      self.logger.info('SSH Keys already generated.')
-
-    with open(sshd_conf['sshpublic_key_file'], 'r') as public_key:
-      sshd_conf.update(sshpublic_key_value=public_key.read())
-
+  def installWebDAVBackup(self):
     computer_partition = self.request(
       # XXX: Hardcoded url
-      'http://git.erp5.org/gitweb/slapos.git/blob_plain/refs/heads/mariadb-failover:/software/pull_backup_server/software.cfg',
+      'http://git.erp5.org/gitweb/slapos.git/blob_plain/refs/heads/webdav:/software/davstorage/software.cfg'
+      'davstorage',
       'mysql_backup',
-      'mysql_backup',
-      partition_parameter_kw={
-        'remote_pubkey': sshd_conf['sshpublic_key_value'],
-        'remote_hostname': sshd_conf['ip'],
-        'remote_port': sshd_conf['port'],
-        'remote_directory': self.mysql_backup_directory,
-        'remote_rdiffbackup': self.options['rdiff_backup_binary'],
-      },
     )
-
-    sshd_conf['backup_sshkey_value'] = str(
-      computer_partition.getConnectionParameter('public_ssh_key')
-    ).strip()
-
-    self.logger.debug('Authorized keys file generation...')
-    authorized_keys_file = self._writeFile(
-      os.path.join(sshd_conf['fakessh_dir'], 'authorized_keys'),
-      '%s\n' % sshd_conf['backup_sshkey_value'],
-    )
-    sshd_conf.update(authkey_file=authorized_keys_file)
-    self.logger.info('Authorized keys file generated.')
-
-    self.logger.debug('Generating sshd executable...')
-    wrapper = zc.buildout.easy_install.scripts(
-      [('sshd', 'slapos.recipe.librecipe.execute', 'executee')],
-      self.ws, sys.executable,
-      self.wrapper_directory, arguments=[
-        # Command line
-        (self.options['dropbear_server_binary'],
-         '-r', sshd_conf['sshprivate_key_file'],
-         '-F', # don't fork
-         '-w', # Disallow root login
-         '-n', # Single user mode
-         '-s', # Disable password login
-         '-E', # Output on stderr
-         '-p', '%s:%s' % (sshd_conf['ip'], sshd_conf['port']),
-        ),
-        # Environemnt
-        {
-          'DROPBEAR_OVERRIDE_HOME': sshd_conf['fakehome_dir'],
-          'DROPBEAR_OVERRIDE_SHELL': '/bin/sh',
-        }
-      ]
-    )[0]
-    self.logger.info('sshd executable generated.')
-
-    self.path_list.append(wrapper)
-
-    return sshd_conf
+    url = re.sub('^http', 'webdav', computer_partition.getConnectionParameter('url'))
+    url = list(urlparse.urlparse(url))
+    url[1] = '%(user)s:%(password)s@%(netloc)s' % {
+      'user': computer_partition.getConnectionParameter('user'),
+      'password': computer_partition.getConnectionParameter('password'),
+      'netloc': url[1],
+    }
+    return urlparse.urlunparse(url)
