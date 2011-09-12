@@ -66,5 +66,9 @@ setup(name=name,
           'xwiki = slapos.recipe.xwiki:Recipe',
           'zabbixagent = slapos.recipe.zabbixagent:Recipe',
           'pull_backup_server = slapos.recipe.pull_backup_server:Recipe',
+          # Generic recipes
+          'format = slapos.recipe.format:Recipe',
+          'runner = slapos.recipe.runner:Recipe',
+          'conditionalrunner = slapos.recipe.runner.conditional:Recipe'
       ]},
     )

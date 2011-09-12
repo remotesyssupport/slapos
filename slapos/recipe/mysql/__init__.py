@@ -39,6 +39,11 @@ class Recipe(BaseSlapRecipe):
     return pkg_resources.resource_filename(__name__,
         'template/%s' % template_name)
 
+  def parseCmdArgument(self, arg):
+    if any([(i in arg) for i in ["'", ' ', "\\"]]):
+      return "'%s'" % re.sub(r"(\\|\')", r'\\\1', arg)
+    return arg
+
   def _install(self):
     self.path_list = []
 
@@ -299,52 +304,48 @@ class Recipe(BaseSlapRecipe):
 
     # backup configuration
     backup_directory = self.createBackupDirectory('mysql')
-    full_backup = os.path.join(backup_directory, 'full')
-    incremental_backup = os.path.join(backup_directory, 'incremental')
-    self._createDirectory(full_backup)
-    self._createDirectory(incremental_backup)
-    innobackupex_argument_list = [self.options['perl_binary'],
-        self.options['innobackupex_binary'],
-        '--defaults-file=%s' % mysql_conf_path,
-        '--socket=%s' %mysql_conf['socket'].strip(), '--user=root']
-    environment = dict(PATH='%s' % self.bin_directory)
-    innobackupex_incremental = zc.buildout.easy_install.scripts([(
-      'innobackupex_incremental', 'slapos.recipe.librecipe.execute', 'executee')],
-      self.ws, sys.executable, self.bin_directory, arguments=[
-        innobackupex_argument_list + ['--incremental'],
-        environment])[0]
-    self.path_list.append(innobackupex_incremental)
-    innobackupex_full = zc.buildout.easy_install.scripts([('innobackupex_full',
-      'slapos.recipe.librecipe.execute', 'executee')], self.ws,
-      sys.executable, self.bin_directory, arguments=[
-        innobackupex_argument_list,
-        environment])[0]
-    self.path_list.append(innobackupex_full)
-    backup_controller = zc.buildout.easy_install.scripts([
-      ('innobackupex_controller', __name__ + '.innobackupex', 'controller')],
-      self.ws, sys.executable, self.bin_directory,
-      arguments=[innobackupex_incremental, innobackupex_full, full_backup,
-        incremental_backup])[0]
-    self.path_list.append(backup_controller)
+    tmp_backup_directory = self.createBackupDirectory('mysql_pending')
+    mysqldump_cmdline_list = [self.options['mysqldump_binary'],
+                              mysql_conf['mysql_database'],
+                              '-u', 'root',
+                              '-S', mysql_conf['socket'].strip(),
+                              '--single-transaction', '--opt',
+                             ]
+    mysqldump_cmdline_str = ' '.join(
+      [self.parseCmdArgument(arg) for arg in mysqldump_cmdline_list]
+    )
+    dump_filename = 'dump.sql.gz'
+    dump_file = os.path.join(backup_directory, dump_filename)
+    tmpdump_file = os.path.join(tmp_backup_directory, dump_filename)
     mysql_backup_cron = os.path.join(self.cron_d, 'mysql_backup')
-    open(mysql_backup_cron, 'w').write('0 0 * * * %r' % str(backup_controller))
+    with open(mysql_backup_cron, 'w') as file_:
+      file_.write('0 0 * * * %(mysqldump)s | %(gzip)s > %(tmpdump)s' \
+                  '&& mv %(tmpdump)s %(dumpfile)s' % {
+                    'mysqldump': mysqldump_cmdline_str,
+                    'gzip': self.options['gzip_binary'],
+                    'tmpdump': self.parseCmdArgument(tmpdump_file),
+                    'dumpfile': self.parseCmdArgument(dump_file),
+                  }
+                 )
     self.path_list.append(mysql_backup_cron)
-    mysql_conf.update(backup_directory=incremental_backup)
-    # The return could be more explicit database, user ...
+    mysql_conf.update(backup_directory=backup_directory)
+    # Remote backup
     remote_url = self.installWebDAVBackup()
     remote_backup_cron = os.path.join(self.cron_d, 'remote_backup')
     with open(remote_backup_cron, 'w') as file_:
       file_.write('1 0 * * * %s' % ' '.join([
-        '%r' % str(self.options['duplicity_binary']),
+        self.parseCmdArgument(self.options['duplicity_binary']),
         '--no-encryption',
-        '%r' % str(backup_directory), '%r' % str(remote_url),
+        self.parseCmdArgument(backup_directory),
+        self.parseCmdArgument(remote_url),
       ]))
+    # The return could be more explicit database, user ...
     return mysql_conf
 
   def installWebDAVBackup(self):
     computer_partition = self.request(
       # XXX: Hardcoded url
-      'http://git.erp5.org/gitweb/slapos.git/blob_plain/refs/heads/webdav:/software/davstorage/software.cfg'
+      'file:///home/antoine/Development/slapos-devel/slapos/software/davstorage/software.cfg',
       'mysql_backup',
       'davstorage',
     )
