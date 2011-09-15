@@ -29,38 +29,79 @@
 
 import shlex
 import sys
+import re
 
 from slapos.recipe.librecipe import BaseSlapRecipe
 import zc.buildout
 
 class Recipe(BaseSlapRecipe):
 
+  YES = ['1', 'yes', 'y', 'true']
+
+
+  def _options(self, options):
+      if 'name' not in options:
+        options['name'] = self.name
+
+      self.python = ('type' in options and options['type'] == 'python')
+
+      options['location'] = self.wrapper_directory
+      if 'service' in options and  options['service'] not in Recipe.YES:
+        options['location'] = self.bin_directory
+
   def _install(self):
     self.path_list = []
     self.createRunner()
     return self.path_list
 
+  def getCommandLine(self):
+    if 'cmd' in self.options:
+      return shlex.split(self.options['cmd'])
+    elif any([re.match(r'cmd_\d+', option) for option in self.options.keys()]):
+      arguments = [matching for matching in [re.match(r'cmd_(\d+)', option)
+                                             for option in self.options.keys()]
+                   if matching]
+      arguments.sort(cmp=lambda x, y: cmp(int(x.group(1)), int(y.group(1))))
+      return [self.options[arg.group()] for arg in arguments]
+    else:
+      raise zc.buildout.UserError("No command line specified.")
+
   def createRunner(self):
-    command_line = shlex.split(self.options['cmd'])
-    environment = self.options.get('environment', None)
-    name = self.options['name']
     self.requirements, self.ws = self.egg.working_set()
+    environment = self.options.get('environment', None)
+
     if environment is not None:
       # Just a dummy parser
       environment = dict([
-        tuple([str(values).strip() for values in line.split('=', 1)
-               if '=' in line])
+        tuple([str(values).strip() for values in line.split('=', 1)])
         for line in str(environment).splitlines()
+        if '=' in line
       ])
 
-    function = 'execute'
-    arguments = command_line
+    if not self.python:
+      command_line = self.getCommandLine()
 
-    if environment is not None:
-      function = 'executee'
-      arguments = (command_line, environment)
+      function = 'execute'
+      arguments = command_line
 
-    wrapper = zc.buildout.easy_install.scripts([(name,
-      'slapos.recipe.librecipe.execute', function)], self.ws,
-      sys.executable, self.wrapper_directory, arguments=arguments)[0]
-    self.path_list.append(wrapper)
+      if environment is not None:
+        function = 'executee'
+        arguments = (command_line, environment)
+
+      runner = zc.buildout.easy_install.scripts([(self.options['name'],
+        'slapos.recipe.librecipe.execute', function)], self.ws,
+        sys.executable, self.options['location'], arguments=arguments)[0]
+
+    else:
+      if 'script' not in self.options:
+        raise zc.buildout.UserError("No python script specified")
+
+      if environment is None:
+        environment = {}
+      args = ', '.join([repr(arg) for arg in (self.options['script'], {}, environment)])
+
+      runner = zc.buildout.easy_install.scripts([(self.options['name'],
+        '__builtin__', 'execfile')], self.ws,
+        sys.executable, self.options['location'], arguments=args)[0]
+
+    self.path_list.append(runner)

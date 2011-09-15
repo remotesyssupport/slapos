@@ -30,47 +30,52 @@
 import os
 
 from slapos.recipe.librecipe import BaseSlapRecipe
+import zc.buildout
 
 class Recipe(BaseSlapRecipe):
 
-  PREFIX_OPTION = 'substitute_'
-  PREFIX_PARAMETER = 'parameter_'
+  def directoryByType(self, type_):
+    try:
+      return {
+        'data': self.data_root_directory,
+        'backup': self.backup_directory,
+        'log': self.log_directory,
+        'config_parts': self.etc_directory,
+      }[type_]
+    except KeyError, e:
+      self.logger.error('Directory type %r does not exist' % e.message)
+      raise zc.buildout.UserError('Directory type %r does not exist' % e.message)
 
   def _options(self, options):
-    if 'location' not in options:
-      options['location'] = os.path.join(self.work_directory,
-                                         'format', self.name)
+    if 'type' not in options:
+      self.logger.error('No directory type was specified.')
+      raise zc.buildout.UserError('No directory type in the part %s' % self.name)
+
+    name = self.name
+    if 'name' in options:
+      name = options['name']
+
+    options['location'] = os.path.join(self.directoryByType(options['type']),
+                                                            name)
 
   def _install(self):
+    mode = '0700'
+    if mode in self.options:
+      mode = self.options['mode']
 
-    self.path_list = []
+    removable = True
+    if 'removable' in self.options:
+      removable = str(self.options['removable']).lower() in ['y', 'yes',
+                                                             'true', '1']
 
-    format_dict = dict(
-      [(k[len(Recipe.PREFIX_OPTION):], v)
-       for k, v in self.options.items()
-       if k.startswith(Recipe.PREFIX_OPTION)
-      ]
-    )
-    format_dict.update(dict(
-      [('%s%s' % (Recipe.PREFIX_PARAMETER, k,), v)
-       for k, v in self.parameter_dict.items()
-      ]
-    ))
+    if os.path.exists(self.options['location']):
+      if not os.path.isdir(self.options['location']):
+        self.logger.error("There is already something in %r, but it's not a directory!")
+        raise OSError("Impossible to create directory %r, something's already there.")
 
-    if not os.path.exists(self.options['location']):
+    else:
       os.makedirs(self.options['location'], mode=0700)
-    elif not os.path.isdir(self.options['location']):
-      raise OSError("%r already exists but it's not a directory." % (
-          self.options['location'],
-        )
-      )
 
-    result_path = os.path.join(self.options['location'],
-                               self.options['filename'])
-    with open(result_path, 'w') as result, \
-         open(self.options['source'], 'r') as source:
-      result.write(source.read() % format_dict)
-
-    self.path_list.append(result_path)
-
-    return self.path_list
+    if removable:
+      return [self.options['location']]
+    return []

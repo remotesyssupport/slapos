@@ -91,6 +91,10 @@ class BaseSlapRecipe:
     # setup egg to give possibility to generate scripts
     self.egg = zc.recipe.egg.Egg(buildout, options['recipe'], options)
 
+    # If recipe wants to raise options
+    if hasattr(self, '_options'):
+      self._options(options)
+
     # setup auto uninstall/install
     self._setupAutoInstallUninstall()
 

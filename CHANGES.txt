@@ -5,6 +5,13 @@ Changes
 -----------------
 
  * No change yet.
+ * Add generic recipe to get ready for the specific
+   software recipes removal. [Antoine Catton]
+    - Recipe in question :
+      + slapos.cookbook:format
+      + slapos.cookbook:mkdir
+      + slapos.cookbook:runner
+      + slapos.cookbook:conditionalrunner
 
 
 0.22 (2011-09-12)
