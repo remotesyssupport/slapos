@@ -1,12 +1,24 @@
 Changes
 =======
 
-0.23 (unreleased)
+0.25 (unreleased)
+-----------------
+
+ * No changes yet.
+
+0.24 (2011-09-19)
+-----------------
+
+ * mysql: Unhardcode the requested url. [Antoine Catton]
+
+0.23 (2011-09-19)
 -----------------
 
  * Clean code in mysql recipe [Cedric de Saint Martin]
  * librecipe: Provide createPromiseWrapper method. [Antoine Catton]
  * kvm: Expose promisee checks to slapgrid. [Antoine Catton]
+ * davstorage: Initial version. [Antoine Catton]
+ * mysql: Support DAV backup. [Antoine Catton]
 
 0.22 (2011-09-12)
 -----------------
