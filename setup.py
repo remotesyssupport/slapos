@@ -36,12 +36,13 @@ setup(name=name,
         'zc.buildout', # plays with buildout
         'zc.recipe.egg', # for scripts generation
         ],
-      zip_safe=True,
+      zip_safe=False,
       entry_points={
         'zc.buildout': [
           'download = slapos.recipe.download:Recipe',
           'erp5 = slapos.recipe.erp5:Recipe',
           'erp5testnode = slapos.recipe.erp5testnode:Recipe',
+          'erp5performancetest = slapos.recipe.erp5performancetest:Recipe',
           'helloworld = slapos.recipe.helloworld:Recipe',
           'java = slapos.recipe.java:Recipe',
           'kumofs = slapos.recipe.kumofs:Recipe',

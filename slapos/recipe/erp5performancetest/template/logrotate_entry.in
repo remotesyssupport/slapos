@@ -1,0 +1,12 @@
+%(file_list)s {
+  daily
+  dateext
+  compress
+  notifempty
+  sharedscripts
+  create
+  postrotate
+    %(postrotate)s
+  endscript
+  olddir %(olddir)s
+}
