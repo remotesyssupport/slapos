@@ -344,8 +344,8 @@ class Recipe(BaseSlapRecipe):
 
   def installWebDAVBackup(self):
     computer_partition = self.request(
-      # XXX: Hardcoded url
-      'file:///home/antoine/Development/slapos-devel/slapos/software/davstorage/software.cfg',
+      self.options['davstorage-software-url'],
+      'davstorage',
       'mysql_backup',
       'davstorage',
     )

@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 import glob
 import os
 
-version = '0.21-dev'
+version = '0.25-dev'
 name = 'slapos.cookbook'
 long_description = open("README.txt").read() + "\n" + \
     open("CHANGES.txt").read() + "\n"
@@ -65,7 +65,6 @@ setup(name=name,
           'vifib = slapos.recipe.vifib:Recipe',
           'xwiki = slapos.recipe.xwiki:Recipe',
           'zabbixagent = slapos.recipe.zabbixagent:Recipe',
-          'pull_backup_server = slapos.recipe.pull_backup_server:Recipe',
           # Generic recipes
           'format = slapos.recipe.format:Recipe',
           'runner = slapos.recipe.runner:Recipe',
