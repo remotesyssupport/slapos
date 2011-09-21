@@ -32,7 +32,6 @@ import sys
 import zc.buildout
 import ConfigParser
 import re
-import urlparse
 
 class Recipe(BaseSlapRecipe):
   def getTemplateFilename(self, template_name):
@@ -329,31 +328,5 @@ class Recipe(BaseSlapRecipe):
                  )
     self.path_list.append(mysql_backup_cron)
     mysql_conf.update(backup_directory=backup_directory)
-    # Remote backup
-    remote_url = self.installWebDAVBackup()
-    remote_backup_cron = os.path.join(self.cron_d, 'remote_backup')
-    with open(remote_backup_cron, 'w') as file_:
-      file_.write('1 0 * * * %s' % ' '.join([
-        self.parseCmdArgument(self.options['duplicity_binary']),
-        '--no-encryption',
-        self.parseCmdArgument(backup_directory),
-        self.parseCmdArgument(remote_url),
-      ]))
     # The return could be more explicit database, user ...
     return mysql_conf
-
-  def installWebDAVBackup(self):
-    computer_partition = self.request(
-      self.options['davstorage-software-url'],
-      'davstorage',
-      'mysql_backup',
-      'davstorage',
-    )
-    url = re.sub('^http', 'webdav', computer_partition.getConnectionParameter('url'))
-    url = list(urlparse.urlparse(url))
-    url[1] = '%(user)s:%(password)s@%(netloc)s' % {
-      'user': computer_partition.getConnectionParameter('user'),
-      'password': computer_partition.getConnectionParameter('password'),
-      'netloc': url[1],
-    }
-    return urlparse.urlunparse(url)

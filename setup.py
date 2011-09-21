@@ -65,9 +65,5 @@ setup(name=name,
           'vifib = slapos.recipe.vifib:Recipe',
           'xwiki = slapos.recipe.xwiki:Recipe',
           'zabbixagent = slapos.recipe.zabbixagent:Recipe',
-          # Generic recipes
-          'format = slapos.recipe.format:Recipe',
-          'runner = slapos.recipe.runner:Recipe',
-          'conditionalrunner = slapos.recipe.runner.conditional:Recipe'
       ]},
     )
