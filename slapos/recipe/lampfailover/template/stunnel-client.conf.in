@@ -1,0 +1,10 @@
+foreground = yes
+output = %(log)s
+pid = %(pid_file)s
+syslog = no
+fips = no
+
+[service]
+client = yes
+accept = %(local_ip)s:%(local_port)s
+connect = %(remote_ip)s:%(remote_port)s

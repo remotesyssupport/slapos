@@ -45,6 +45,27 @@ class Recipe(BaseSlapRecipe):
     return arg
 
   def _install(self):
+    software_type = self.parameter_dict['slap_software_type']
+    if software_type == 'RootSoftwareInstance':
+      mariadb = self.request(self.software_release_url, 'database', 'MariaDB')
+      self.installApache(mariadb)
+      return [self.createRunningWrapper('bidon', '')]
+    elif software_type == 'database':
+      self.installMariaDB()
+
+  def installApache(self, mariadb_connection):
+    self.path_list = []
+    self.requirements, self.ws = self.egg.working_set()
+    remote = (mariadb_connection.getConnectionParameter('stunnel_ip'),
+              mariadb_connection.getConnectionParameter('stunnel_port'),
+             )
+    local = (self.getLocalIPv4Address(), 3000)
+    self.installStunnelClient(local, remote)
+    self.setConnectionDict(dict(mysql_ip=local[0],
+                                mysql_port=local[1],))
+    return self.path_list
+
+  def installMariaDB(self):
     self.path_list = []
 
     self.requirements, self.ws = self.egg.working_set()
@@ -58,7 +79,7 @@ class Recipe(BaseSlapRecipe):
     ca_conf = self.installCertificateAuthority()
     key, certificate = self.requestCertificate('MySQL')
 
-    stunnel_conf = self.installStunnel(self.getGlobalIPv6Address(),
+    stunnel_conf = self.installStunnelServer(self.getGlobalIPv6Address(),
         self.getLocalIPv4Address(), 12345, mysql_conf['tcp_port'],
         certificate, key, ca_conf['ca_crl'],
         ca_conf['certificate_authority_path'])
@@ -200,10 +221,10 @@ class Recipe(BaseSlapRecipe):
     parser.write(open(os.path.join(self.ca_request_dir, hash), 'w'))
     return key, certificate
 
-  def installStunnel(self, public_ip, private_ip, public_port, private_port,
-      ca_certificate, key, ca_crl, ca_path):
+  def installStunnelServer(self, public_ip, private_ip, public_port,
+    private_port, ca_certificate, key, ca_crl, ca_path):
     """Installs stunnel"""
-    template_filename = self.getTemplateFilename('stunnel.conf.in')
+    template_filename = self.getTemplateFilename('stunnel-mariadb.conf.in')
     log = os.path.join(self.log_directory, 'stunnel.log')
     pid_file = os.path.join(self.run_directory, 'stunnel.pid')
     stunnel_conf = dict(
@@ -229,6 +250,30 @@ class Recipe(BaseSlapRecipe):
       )[0]
     self.path_list.append(wrapper)
     return stunnel_conf
+
+  def installStunnelClient(self, local, remote):
+    remote_ip, remote_port = remote
+    local_ip, local_port = local
+    template_filename = self.getTemplateFilename('stunnel-client.conf.in')
+    log = os.path.join(self.log_directory, 'stunnel.log')
+    pid_file = os.path.join(self.run_directory, 'stunnel.pid')
+    stunnel_conf = dict(
+      remote_ip=remote_ip,
+      remote_port=remote_port,
+      local_ip=local_ip,
+      local_port=local_port,
+      log=log,
+      pid_file=pid_file,
+    )
+    stunnel_conf_path = self.createConfigurationFile("stunnel.conf",
+      self.substituteTemplate(template_filename, stunnel_conf))
+    self.path_list.append(stunnel_conf_path)
+    wrapper = zc.buildout.easy_install.scripts([('stunnel',
+      'slapos.recipe.librecipe.execute', 'execute')], self.ws,
+      sys.executable, self.wrapper_directory, arguments=[
+        self.options['stunnel_binary'].strip(), stunnel_conf_path],
+      )[0]
+    self.path_list.append(wrapper)
 
 
   def installMysqlServer(self, ip, port, database='db', user='user',
@@ -310,7 +355,7 @@ class Recipe(BaseSlapRecipe):
     mysql_backup_cron = os.path.join(self.cron_d, 'mysql_backup')
     with open(mysql_backup_cron, 'w') as file_:
       file_.write('0 0 * * * %(mysqldump)s | %(gzip)s > %(tmpdump)s' \
-                  '&& mv %(tmpdump)s %(dumpfile)s' % {
+                  '&& mv -f %(tmpdump)s %(dumpfile)s' % {
                     'mysqldump': mysqldump_cmdline_str,
                     'gzip': self.options['gzip_binary'],
                     'tmpdump': self.parseCmdArgument(tmpdump_file),
@@ -321,23 +366,26 @@ class Recipe(BaseSlapRecipe):
     mysql_conf.update(backup_directory=backup_directory)
     # Remote backup
     remote_url = self.installWebDAVBackup()
+    remote_backup_bin = zc.buildout.easy_install.scripts([('remote_backup',
+      'slapos.recipe.librecipe.execute', 'execute')], self.ws,
+      sys.executable, self.bin_directory, arguments=[
+        self.options['duplicity_binary'], '--no-encryption',
+        backup_directory, remote_url]
+      )[0]
+    self.path_list.append(remote_backup_bin)
     remote_backup_cron = os.path.join(self.cron_d, 'remote_backup')
+    self.path_list.append(remote_backup_cron)
     with open(remote_backup_cron, 'w') as file_:
-      file_.write('1 0 * * * %s' % ' '.join([
-        self.parseCmdArgument(self.options['duplicity_binary']),
-        '--no-encryption',
-        self.parseCmdArgument(backup_directory),
-        self.parseCmdArgument(remote_url),
-      ]))
+      file_.write('1 0 * * * %s' % self.parseCmdArgument(
+        remote_backup_bin))
     # The return could be more explicit database, user ...
     return mysql_conf
 
   def installWebDAVBackup(self):
     computer_partition = self.request(
       self.options['davstorage-software-url'],
-      'davstorage',
-      'mysql_backup',
-      'davstorage',
+      'RootSoftwareInstance',
+      'Backup MariaDB',
     )
     url = re.sub('^http', 'webdav', computer_partition.getConnectionParameter('url'))
     url = list(urlparse.urlparse(url))
