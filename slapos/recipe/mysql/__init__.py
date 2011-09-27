@@ -44,6 +44,7 @@ class Recipe(BaseSlapRecipe):
     return arg
 
   def _install(self):
+    self.software_type = self.parameter_dict['slap_software_type']
     self.path_list = []
 
     self.requirements, self.ws = self.egg.working_set()
@@ -63,13 +64,12 @@ class Recipe(BaseSlapRecipe):
         ca_conf['certificate_authority_path'])
 
     self.linkBinary()
-    self.setConnectionDict(dict(
-      stunnel_ip = stunnel_conf['public_ip'],
-      stunnel_port = stunnel_conf['public_port'],
-      mysql_database = mysql_conf['mysql_database'],
-      mysql_user = mysql_conf['mysql_user'],
-      mysql_password = mysql_conf['mysql_password'],
-    ))
+    self.setConnectionUrl(scheme='mysqls',
+                          host=stunnel_conf['public_ip'],
+                          port=stunnel_conf['public_port'],
+                          auth=(mysql_conf['mysql_user'],
+                                mysql_conf['mysql_password']),
+                          path=mysql_conf['mysql_database'])
     return self.path_list
 
   def linkBinary(self):
