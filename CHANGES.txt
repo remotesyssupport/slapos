@@ -6,6 +6,11 @@ Changes
 
  * No changes yet
 
+0.27 (2011-09-07)
+-----------------
+
+ * mysql: add backup and backup recovering using different software type. [Antoine Catton]
+
 0.26 (2011-09-27)
 -----------------
 
