@@ -34,9 +34,4 @@ def import_remote_dump(kwargs):
                            stdin=zcat.stdout)
   zcat.stdout.close()
 
-  returncode = mysql.poll()
-
-  if returncode > 0:
-    open(lock_file, 'w').close() # Just a touch
-
-  sys.exit(returncode)
+  sys.exit(mysql.poll())
